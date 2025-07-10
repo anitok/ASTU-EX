@@ -500,6 +500,52 @@
     </footer>
 
     <script>
+document.addEventListener('DOMContentLoaded', function() {
+  loadSavedData();
+  // Refresh data every 5 minutes
+  setInterval(loadSavedData, 300000); 
+});
+        // === GITHUB INTEGRATION ===
+const GITHUB_TOKEN = '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';
+const REPO = 'anitok/antu_data';
+
+async function fetchFromGitHub(filename) {
+  try {
+    const response = await fetch(`https://api.github.com/repos/${REPO}/contents/${filename}`, {
+      headers: { 'Authorization': `token ${GITHUB_TOKEN}` }
+    });
+    const data = await response.json();
+    return JSON.parse(atob(data.content));
+  } catch (error) {
+    console.error('GitHub API Error:', error);
+    return []; // Return empty array if fetch fails
+  }
+}
+
+async function saveToGitHub(filename, content) {
+  try {
+    // Get current file SHA
+    const current = await fetchFromGitHub(filename);
+    const sha = current.sha || '';
+
+    const response = await fetch(`https://api.github.com/repos/${REPO}/contents/${filename}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `token ${GITHUB_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: `Update ${filename} via website`,
+        content: btoa(JSON.stringify(content, null, 2)),
+        sha: sha
+      })
+    });
+    return response.ok;
+  } catch (error) {
+    console.error('GitHub Save Error:', error);
+    return false;
+  }
+}
         // Data structure for storing website content
         const websiteData = {
             materials: [],
@@ -530,19 +576,23 @@
             renderAllContent();
         });
 
-        // Load saved data from localStorage
-        function loadSavedData() {
-            const savedData = localStorage.getItem('astuExcellenceData');
-            if (savedData) {
-                Object.assign(websiteData, JSON.parse(savedData));
-            }
-        }
+    // Replace your loadSavedData() function with:
+async function loadSavedData() {
+  websiteData.materials = await fetchFromGitHub('materials.json');
+  websiteData.questions = await fetchFromGitHub('questions.json');
+  websiteData.announcements = await fetchFromGitHub('announcements.json');
+  renderAllContent();
+}
 
         // Save data to localStorage
-        function saveData() {
-            localStorage.setItem('astuExcellenceData', JSON.stringify(websiteData));
-        }
-
+     // Replace your saveData() function with:
+async function saveData(type) {
+  const filename = `${type}.json`;
+  const success = await saveToGitHub(filename, websiteData[type]);
+  if (!success) {
+    showNotification('Failed to save to GitHub', 'error');
+  }
+}
         // Initialize UI components
         function initUI() {
             // Add "Add" buttons if admin
@@ -659,7 +709,7 @@
         }
 
         // Material functions
-        function addMaterial() {
+           async function addMaterial() {
             const course = document.getElementById('materialCourse').value;
             const type = document.getElementById('materialType').value;
             const description = document.getElementById('materialDescription').value;
@@ -697,7 +747,7 @@
                 websiteData.materials.unshift(newMaterial);
             }
             
-            saveData();
+            await saveData();
             renderMaterials();
             showNotification(`Material ${editId ? 'updated' : 'added'} successfully!`, 'success');
             toggleMaterialForm();
@@ -720,10 +770,10 @@
             }
         }
         
-        function deleteMaterial(id) {
+        async function deleteMaterial(id) {
             if(confirm('Are you sure you want to delete this material?')) {
                 websiteData.materials = websiteData.materials.filter(m => m.id !== id);
-                saveData();
+                await saveData();
                 renderMaterials();
                 showNotification('Material deleted successfully', 'success');
             }
